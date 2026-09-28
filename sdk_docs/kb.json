@@ -1,0 +1,690 @@
+{
+  "meta": {
+    "sdk": "Exynos AI Studio (EAIS) SDK 3.0",
+    "source": "https://soc-developer.semiconductor.samsung.com/global/development/ai-studio/document/documentation/sdk-3.0",
+    "fetched": "2026-09-28",
+    "note": "sdk_docs/raw/*.md 원문에서 사용자가 골라야 하는 파라미터만 뽑아 구조화했다. 순서가 곧 기본 질문 순서다.",
+    "docs": {
+      "eais-user-guide": "EAIS 사용자 가이드",
+      "whats-new": "SDK 3.0 업데이트 안내",
+      "debug-guide": "디버그 가이드",
+      "compile-guide": "컴파일 가이드",
+      "profiling-guide": "프로파일링 가이드"
+    }
+  },
+  "files": {
+    "model_yaml": "<workspace>/<model_name>.yaml",
+    "dbgen_spec": "Config/DATA/dbgen_spec.yaml",
+    "compiler_tuning": "Config/compiler_tuning_mode_config.yaml",
+    "profiler_advanced": "Config/profiler_advanced_config.yaml",
+    "debug_yaml": "Config/debug.yaml",
+    "pipeline": "(CLI 실행 계획)"
+  },
+  "stages": [
+    {
+      "id": "init", "title": "워크스페이스 초기화", "cmd": "eais init --w <workspace>", "need": "필수",
+      "desc": "워크스페이스(폴더명 = 모델 파일명)에 <model_name>.yaml 과 Config/ 설정 파일을 만든다. 이미 init 된 곳에서 다시 실행하면 yaml 을 덮어쓴다.",
+      "outputs": "<model_name>.yaml · Config/ · Config/DATA/dbgen_spec.yaml (랜덤 기본값)",
+      "doc": "eais-user-guide", "section_title": "Step 1: init",
+      "prefixes": ["workspace.", "general."]
+    },
+    {
+      "id": "generation", "title": "캘리브레이션 데이터 생성", "cmd": "eais generation --w <workspace>", "need": "필수",
+      "desc": "Config/DATA/dbgen_spec.yaml 을 읽어 캘리브레이션용 npy 를 만든다. dbgen_spec.yaml 은 반드시 실제 모델 입력 개수·shape 에 맞게 편집해야 한다.",
+      "outputs": "Config/DATA/input_data/<input_name>/database_*.npy · database.txt · input_folder_mapping.json",
+      "doc": "eais-user-guide", "section_title": "Step 2: generation",
+      "prefixes": ["dbgen."]
+    },
+    {
+      "id": "conversion", "title": "모델 변환", "cmd": "eais conversion --w <workspace>", "need": "필수",
+      "desc": "EHT(converter → optimizer → quantizer, 단계마다 ModelValidator) → ELT(specifier) 순서로 ONNX/TFLite 를 타겟 SoC 용 HW SNC 로 변환한다. generation 이 먼저 끝나 있어야 한다.",
+      "outputs": "Converter_result/HW_<model>_<version>.snc · NPU_<model>/testvector/ · Debug_result/pipeline_artifacts.json",
+      "doc": "eais-user-guide", "section_title": "Step 3: conversion",
+      "prefixes": ["converter.", "conversion."]
+    },
+    {
+      "id": "debug", "title": "정확도 검증 · 시각화", "cmd": "eais debug --w <workspace>", "need": "선택",
+      "desc": "conversion 각 모듈 산출물을 원본과 비교해 SNR/PSNR/COSSIM 을 계산하거나 그래프를 브라우저에서 시각화한다. pipeline_artifacts.json 이 필요하다.",
+      "outputs": "Debug_result/accuracy_validation_results/accuracy_comparison.xlsx · debug_report.json",
+      "doc": "debug-guide", "section_title": "옵션 및 파라미터",
+      "prefixes": ["debug."]
+    },
+    {
+      "id": "compile", "title": "NNC 컴파일", "cmd": "eais compile --w <workspace>", "need": "권장",
+      "desc": "Converter_result/HW_*.snc 를 NPU 에서 실행 가능한 .nnc 로 컴파일한다. 기기에서 돌리려면 필요하다.",
+      "outputs": "Compiler_result/<model>.nnc · NNCInfo.csv · nncontainer-gen.txt",
+      "doc": "compile-guide", "section_title": "옵션 정리",
+      "prefixes": ["compiler.", "compiler_tuning."]
+    },
+    {
+      "id": "profiling", "title": "실기기 성능 측정", "cmd": "eais profiling --w <workspace>", "need": "선택",
+      "desc": "실제 Exynos 기기에서 .nnc 의 추론 시간·메모리를 측정한다. Compiler_result 와 Enn test app 이 설치된 기기가 필요하다.",
+      "outputs": "Profiler_result/VisualProfiler/Annotation/NPU_STM_summary.json (Perfetto UI 로 확인)",
+      "doc": "profiling-guide", "section_title": "옵션 정리",
+      "prefixes": ["profiler.", "profiler_adv."]
+    }
+  ],
+  "params": [
+    {
+      "id": "pipeline.steps", "file": "pipeline", "key": "steps", "label": "실행할 단계",
+      "type": "multi", "level": "basic",
+      "default": ["init", "generation", "conversion", "compile"],
+      "options": [
+        {"value": "init", "desc": "워크스페이스 초기화 — <model_name>.yaml, Config/ 생성"},
+        {"value": "generation", "desc": "dbgen_spec.yaml 기반 캘리브레이션 npy 데이터 생성"},
+        {"value": "conversion", "desc": "ONNX/TFLite → HW SNC 변환 (EHT: converter·optimizer·quantizer, ELT: specifier)"},
+        {"value": "debug", "desc": "conversion 단계별 정확도(SNR/PSNR/COSSIM) 비교·시각화"},
+        {"value": "compile", "desc": "HW SNC → NPU 실행용 .nnc 컴파일"},
+        {"value": "profiling", "desc": "실기기에서 추론 시간·메모리 측정 (기기 연결 필요)"}
+      ],
+      "desc": "eais CLI 파이프라인 중 SDK 에서 실행할 단계. conversion 전에는 generation 이, compile 전에는 conversion 이 끝나 있어야 한다.",
+      "doc": "eais-user-guide", "section_title": "1. CLI 파이프라인"
+    },
+    {
+      "id": "workspace.path", "file": "pipeline", "key": "workspace", "label": "워크스페이스 경로",
+      "type": "str", "level": "basic", "default": "/home/user/eais-projects/{model_name}",
+      "options": [],
+      "desc": "SDK 쪽 워크스페이스 폴더. 폴더 이름과 모델 파일 이름(확장자 제외)이 반드시 같아야 한다. 다르면 'Error code: 102 workspace error'.",
+      "doc": "eais-user-guide", "section_title": "2. 워크스페이스 구조"
+    },
+    {
+      "id": "general.device", "file": "model_yaml", "section": "general", "key": "device", "label": "타겟 SoC (device)",
+      "type": "enum", "level": "basic", "default": "Gen-9",
+      "options": [
+        {"value": "Gen-9", "desc": "Ulysses (S5E9975)"},
+        {"value": "Gen-8", "desc": "Thetis (S5E9965)"},
+        {"value": "Gen-7", "desc": "Solomon (S5E9955), Terra (S5E8865), Vesper (S5E8875)"},
+        {"value": "Gen-6", "desc": "Root (S5E9945)"},
+        {"value": "Gen-5", "desc": "Quadra (S5E9945), Santa (S5E8855), Rose (S5E8845), Kitt2 (S5AV920)"},
+        {"value": "Gen-4", "desc": "Pamir (S5E9925)"},
+        {"value": "Gen-3", "desc": "Olympus (S5E9840), Quartz (S5E8835)"},
+        {"value": "Gen-2", "desc": "2020AP (S5E9830)"}
+      ],
+      "desc": "모델이 실행될 SoC. 실제 타겟 하드웨어와 다르면 compile/profiling 결과가 무효하다. SDK 3.0 기본값은 Gen-9 (2.5 는 Gen-8).",
+      "doc": "eais-user-guide", "section_title": "general 섹션"
+    },
+    {
+      "id": "converter.skip_quantization", "file": "model_yaml", "section": "converter", "key": "skip_quantization", "label": "양자화 건너뛰기",
+      "type": "bool", "level": "basic", "default": false,
+      "when": [["pipeline.steps", "has", "conversion"]],
+      "options": [
+        {"value": true, "desc": "입력이 이미 양자화된 것으로 보고 specifier 로 바로 진행"},
+        {"value": false, "desc": "캘리브레이션 데이터로 양자화 수행 (일반적인 경우)"}
+      ],
+      "desc": "이미 양자화된 모델(QDQ 노드, int8 텐서 등)이면 true.",
+      "doc": "eais-user-guide", "section_title": "converter 섹션"
+    },
+    {
+      "id": "converter.precision", "file": "model_yaml", "section": "converter", "key": "precision", "label": "양자화 정밀도 (precision)",
+      "type": "enum", "level": "basic", "default": "A8W8",
+      "when": [["pipeline.steps", "has", "conversion"], ["converter.skip_quantization", "!=", true]],
+      "options": [
+        {"value": "A8W8", "desc": "8-bit activation, 8-bit weight — 가장 일반적. 권장 SNR 20dB 이상"},
+        {"value": "A16W8", "desc": "16-bit activation, 8-bit weight — 권장 SNR 30dB 이상"},
+        {"value": "A16W4", "desc": "16-bit activation, 4-bit weight"},
+        {"value": "A8W4", "desc": "8-bit activation, 4-bit weight"},
+        {"value": "FP16", "desc": "16-bit 부동소수점, 정수 양자화 없음 — 권장 SNR 35dB 이상"},
+        {"value": "MXINT8", "desc": "Microscaling INT8 (SDK 3.0 신규)"}
+      ],
+      "desc": "양자화 정밀도 프로파일. 정확도가 부족하면 A8W8 → A16W8 → FP16 순으로 올린다.",
+      "doc": "eais-user-guide", "section_title": "converter 섹션 › precision"
+    },
+    {
+      "id": "dbgen.{input}.random", "file": "dbgen_spec", "key": "random", "per_input": true, "label": "[{input}] 캘리브레이션 데이터 종류",
+      "type": "bool", "level": "basic", "default": true,
+      "when": [["pipeline.steps", "has", "generation"]],
+      "options": [
+        {"value": false, "desc": "실제 데이터셋 사용 (권장) — path/ext 지정 필요"},
+        {"value": true, "desc": "랜덤 텐서 생성 (빠른 테스트용). float 는 [0,1) 균등분포 — 변환 품질 저하 가능"}
+      ],
+      "desc": "eais init 기본값은 랜덤이지만, 그대로 쓰면 변환 품질이 떨어질 수 있어 실제 대표 데이터셋을 권장한다.",
+      "doc": "eais-user-guide", "section_title": "dbgen_spec.yaml 작성 방법"
+    },
+    {
+      "id": "dbgen.{input}.path", "file": "dbgen_spec", "key": "path", "per_input": true, "label": "[{input}] 데이터셋 폴더 경로",
+      "type": "str", "level": "basic", "default": "./dataset",
+      "when": [["pipeline.steps", "has", "generation"], ["dbgen.{input}.random", "==", false]],
+      "options": [
+        {"value": "./dataset", "desc": "<workspace>/dataset (워크스페이스 기준 상대경로, 권장)"},
+        {"value": "./dataset/{input}", "desc": "입력이 여러 개일 때 입력별 하위 폴더"}
+      ],
+      "desc": "상대경로는 워크스페이스 기준으로 해석된다. 워크스페이스 밖이면 절대경로를 쓴다.",
+      "doc": "eais-user-guide", "section_title": "path 경로 주의사항"
+    },
+    {
+      "id": "dbgen.{input}.ext", "file": "dbgen_spec", "key": "ext", "per_input": true, "label": "[{input}] 데이터 파일 확장자",
+      "type": "enum", "level": "basic", "default": "raw",
+      "when": [["pipeline.steps", "has", "generation"], ["dbgen.{input}.random", "==", false]],
+      "options": [
+        {"value": "raw", "desc": "바이너리 텐서. 파일 크기 = dtype 크기 × shape 원소 수 여야 함"},
+        {"value": "bin", "desc": "바이너리 텐서 (raw 와 동일 규칙)"},
+        {"value": "jpg", "desc": "JPEG 이미지"},
+        {"value": "jpeg", "desc": "JPEG 이미지"},
+        {"value": "png", "desc": "PNG 이미지"},
+        {"value": "bmp", "desc": "BMP 이미지"}
+      ],
+      "desc": "데이터셋 파일 확장자.",
+      "doc": "eais-user-guide", "section_title": "dbgen_spec.yaml 작성 방법"
+    },
+    {
+      "id": "dbgen.{input}.shape", "file": "dbgen_spec", "key": "shape", "per_input": true, "label": "[{input}] 입력 shape",
+      "type": "shape", "level": "auto", "default": null,
+      "when": [["pipeline.steps", "has", "generation"]],
+      "options": [],
+      "desc": "모델 입력 텐서 shape. ext 와 관계없이 항상 정의. 모델에서 읽은 값을 쓰며, 동적 차원(batch 등)이 있으면 반드시 정수로 지정해야 한다.",
+      "doc": "eais-user-guide", "section_title": "dbgen_spec.yaml 작성 방법"
+    },
+    {
+      "id": "dbgen.{input}.order", "file": "dbgen_spec", "key": "order", "per_input": true, "label": "[{input}] 차원 순서 (order)",
+      "type": "enum", "level": "basic", "default": "nchw",
+      "when": [["pipeline.steps", "has", "generation"]],
+      "options": [
+        {"value": "nchw", "desc": "(batch, channel, height, width) — PyTorch 기본"},
+        {"value": "nhwc", "desc": "(batch, height, width, channel) — TensorFlow/OpenCV 기본"},
+        {"value": "chw", "desc": "(channel, height, width)"},
+        {"value": "hwc", "desc": "(height, width, channel)"}
+      ],
+      "desc": "입력 데이터의 차원 순서.",
+      "doc": "eais-user-guide", "section_title": "dbgen_spec.yaml 작성 방법"
+    },
+    {
+      "id": "dbgen.{input}.dtype", "file": "dbgen_spec", "key": "dtype", "per_input": true, "label": "[{input}] 데이터 타입",
+      "type": "enum", "level": "auto", "default": "float32",
+      "when": [["pipeline.steps", "has", "generation"]],
+      "options": [
+        {"value": "float32", "desc": ""}, {"value": "float16", "desc": ""}, {"value": "float64", "desc": ""},
+        {"value": "uint8", "desc": ""}, {"value": "int8", "desc": ""}, {"value": "uint16", "desc": ""},
+        {"value": "int16", "desc": ""}, {"value": "int32", "desc": ""}, {"value": "int64", "desc": ""},
+        {"value": "bool", "desc": ""}
+      ],
+      "desc": "데이터 타입. 모델 입력 dtype 과 맞춘다.",
+      "doc": "eais-user-guide", "section_title": "dbgen_spec.yaml 작성 방법"
+    },
+    {
+      "id": "dbgen.{input}.mean", "file": "dbgen_spec", "key": "mean", "per_input": true, "label": "[{input}] 전처리 mean",
+      "type": "list", "level": "basic", "default": [0],
+      "when": [["pipeline.steps", "has", "generation"], ["dbgen.{input}.random", "==", false]],
+      "options": [
+        {"value": [0], "desc": "평균 감산 없음 (데이터가 이미 전처리된 경우)"},
+        {"value": [0.485, 0.456, 0.406], "desc": "ImageNet 평균 (scale 255 로 [0,1] 정규화 후 적용하는 모델)"},
+        {"value": [127.5], "desc": "[-1, 1] 정규화 모델 (scale 127.5 와 함께)"}
+      ],
+      "desc": "output = (raw - mean) * scale. 스칼라 또는 채널 수만큼의 리스트.",
+      "doc": "eais-user-guide", "section_title": "dbgen_spec.yaml 작성 방법"
+    },
+    {
+      "id": "dbgen.{input}.scale", "file": "dbgen_spec", "key": "scale", "per_input": true, "label": "[{input}] 전처리 scale",
+      "type": "list", "level": "basic", "default": [1],
+      "when": [["pipeline.steps", "has", "generation"], ["dbgen.{input}.random", "==", false]],
+      "options": [
+        {"value": [1], "desc": "스케일 없음 (raw 그대로)"},
+        {"value": [255], "desc": "255 로 나눠 [0, 1] 정규화 (scale > 1 이면 내부적으로 1/scale)"},
+        {"value": [127.5], "desc": "127.5 로 나눔 (mean 127.5 와 함께 [-1, 1])"}
+      ],
+      "desc": "scale > 1 이면 내부적으로 역수(1/scale)로 변환된다.",
+      "doc": "eais-user-guide", "section_title": "dbgen_spec.yaml 작성 방법"
+    },
+    {
+      "id": "converter.calibration_mode", "file": "model_yaml", "section": "converter", "key": "calibration_mode", "label": "캘리브레이션 모드",
+      "type": "enum", "level": "basic", "default": "default",
+      "when": [["pipeline.steps", "has", "conversion"], ["converter.skip_quantization", "!=", true], ["converter.precision", "!=", "FP16"]],
+      "options": [
+        {"value": "default", "desc": "calibration_method 에 지정한 방법을 전체 데이터에 적용"},
+        {"value": "auto", "desc": "weight/activation 유형별 최적 캘리브레이션 방법을 자동 탐색"}
+      ],
+      "desc": "캘리브레이션 모드.",
+      "doc": "eais-user-guide", "section_title": "converter 섹션 › calibration_mode"
+    },
+    {
+      "id": "converter.calibration_method", "file": "model_yaml", "section": "converter", "key": "calibration_method", "label": "캘리브레이션 알고리즘",
+      "type": "enum", "level": "basic", "default": "minmax",
+      "when": [["pipeline.steps", "has", "conversion"], ["converter.skip_quantization", "!=", true], ["converter.precision", "!=", "FP16"], ["converter.calibration_mode", "!=", "auto"]],
+      "options": [
+        {"value": "minmax", "desc": "텐서 min/max 로 scale 산출. 가장 빠름"},
+        {"value": "percentile", "desc": "백분위수 기반 아웃라이어 클리핑. heavy-tailed 분포에 유용"},
+        {"value": "histogram_enhanced", "desc": "AIMET tf-enhanced, KL divergence 최소화. 가장 정확하나 느림"}
+      ],
+      "desc": "PTQ scale/offset 추정 알고리즘. SNR 이 낮으면 minmax → percentile → histogram_enhanced 순으로 시도.",
+      "doc": "eais-user-guide", "section_title": "converter 섹션 › calibration_method"
+    },
+    {
+      "id": "converter.use_cuda", "file": "model_yaml", "section": "converter", "key": "use_cuda", "label": "GPU(CUDA) 사용",
+      "type": "bool", "level": "basic", "default": false,
+      "when": [["pipeline.steps", "has", "conversion"], ["converter.skip_quantization", "!=", true]],
+      "options": [
+        {"value": true, "desc": "GPU 에서 캘리브레이션 (빠름, CUDA 장치 필요)"},
+        {"value": false, "desc": "CPU 에서 캘리브레이션"}
+      ],
+      "desc": "변환·양자화 시 CUDA 사용 여부. SDK 서버에 GPU 가 있을 때만 true.",
+      "doc": "eais-user-guide", "section_title": "converter 섹션 › use_cuda"
+    },
+    {
+      "id": "converter.input_dtype", "file": "model_yaml", "section": "converter", "key": "input_dtype", "label": "양자화 모델 입력 dtype",
+      "type": "enum", "level": "basic", "default": "float32",
+      "when": [["pipeline.steps", "has", "conversion"]],
+      "options": [
+        {"value": "float32", "desc": "32-bit float (기본)"}, {"value": "float16", "desc": "16-bit float"},
+        {"value": "uint8", "desc": "unsigned 8-bit"}, {"value": "int8", "desc": "signed 8-bit"},
+        {"value": "uint16", "desc": "unsigned 16-bit"}, {"value": "int16", "desc": "signed 16-bit"},
+        {"value": "none", "desc": "모델 원본 dtype 유지"}
+      ],
+      "desc": "NPU 모델 입력 텐서 dtype 강제 지정. 앱에서 uint8 이미지를 바로 넣으려면 uint8.",
+      "doc": "eais-user-guide", "section_title": "converter 섹션 › input_dtype / output_dtype"
+    },
+    {
+      "id": "converter.output_dtype", "file": "model_yaml", "section": "converter", "key": "output_dtype", "label": "양자화 모델 출력 dtype",
+      "type": "enum", "level": "basic", "default": "float32",
+      "when": [["pipeline.steps", "has", "conversion"]],
+      "options": [
+        {"value": "float32", "desc": "32-bit float (기본)"}, {"value": "float16", "desc": "16-bit float"},
+        {"value": "uint8", "desc": "unsigned 8-bit"}, {"value": "int8", "desc": "signed 8-bit"},
+        {"value": "uint16", "desc": "unsigned 16-bit"}, {"value": "int16", "desc": "signed 16-bit"},
+        {"value": "none", "desc": "모델 원본 dtype 유지"}
+      ],
+      "desc": "input_dtype 과 동일한 규칙.",
+      "doc": "eais-user-guide", "section_title": "converter 섹션 › input_dtype / output_dtype"
+    },
+    {
+      "id": "converter.graph_opt", "file": "model_yaml", "section": "converter", "key": "graph_opt", "label": "그래프 최적화 프로파일",
+      "type": "enum", "level": "basic", "default": "common",
+      "when": [["pipeline.steps", "has", "conversion"]],
+      "options": [
+        {"value": "common", "desc": "범용 최적화 (대부분의 모델)"},
+        {"value": "none", "desc": "그래프 최적화 없음"},
+        {"value": "gaussi_xs_unet", "desc": "GaussI XS U-Net"},
+        {"value": "gaussi_xs_te", "desc": "GaussI XS text encoder"},
+        {"value": "gaussi_xs_ie", "desc": "GaussI XS image encoder"},
+        {"value": "gaussi_xs_vae_decoder", "desc": "GaussI XS VAE decoder"},
+        {"value": "gaussi_xs_ip", "desc": "GaussI XS image prompt"},
+        {"value": "s26_gausslprefill", "desc": "S26 GaussL prefill"},
+        {"value": "animated_diff", "desc": "AnimatedDiff"},
+        {"value": "semantic_search", "desc": "Semantic search 모델"}
+      ],
+      "desc": "특정 모델 패밀리에 맞춘 그래프 최적화 프로파일. 해당 패밀리가 아니면 common.",
+      "doc": "eais-user-guide", "section_title": "converter 섹션 › graph_opt"
+    },
+    {
+      "id": "converter.advanced_quantization_algorithm", "file": "model_yaml", "section": "converter", "key": "advanced_quantization_algorithm", "label": "고급 양자화 알고리즘",
+      "type": "enum", "level": "advanced", "default": null,
+      "when": [["pipeline.steps", "has", "conversion"], ["converter.skip_quantization", "!=", true], ["converter.precision", "!=", "FP16"]],
+      "options": [
+        {"value": null, "desc": "적용 안 함"},
+        {"value": "smoothquant", "desc": "activation-weight 공동 스케일링으로 양자화 오차 감소"},
+        {"value": "adaround", "desc": "저비트 양자화를 위한 학습 기반 per-weight 반올림"}
+      ],
+      "desc": "표준 양자화 위에 적용하는 가중치 튜닝 알고리즘. SNR 이 낮을 때 smoothquant 검토.",
+      "doc": "eais-user-guide", "section_title": "converter 섹션 › advanced_quantization_algorithm"
+    },
+    {
+      "id": "converter.calibration_data_path", "file": "model_yaml", "section": "converter", "key": "calibration_data_path", "label": "캘리브레이션 데이터 경로",
+      "type": "str", "level": "advanced", "default": "Config/DATA",
+      "when": [["pipeline.steps", "has", "conversion"], ["converter.skip_quantization", "!=", true]],
+      "options": [{"value": "Config/DATA", "desc": "eais generation 출력 위치 (기본)"}],
+      "desc": "모델 입력별 서브 폴더와 dbgen_spec.yaml 을 포함한 폴더.",
+      "doc": "eais-user-guide", "section_title": "converter 섹션"
+    },
+    {
+      "id": "converter.expert_yaml", "file": "model_yaml", "section": "converter", "key": "expert_yaml", "label": "고급 변환 설정 파일",
+      "type": "str", "level": "auto", "default": "Config/conversion_expert.yaml",
+      "when": [["pipeline.steps", "has", "conversion"]],
+      "options": [],
+      "desc": "최적화·양자화 고급 파라미터 파일 경로.",
+      "doc": "eais-user-guide", "section_title": "converter 섹션"
+    },
+    {
+      "id": "conversion.stage", "file": "pipeline", "key": "conversion_stage", "label": "변환 구간",
+      "type": "enum", "level": "advanced", "default": "full",
+      "when": [["pipeline.steps", "has", "conversion"]],
+      "options": [
+        {"value": "full", "desc": "EHT + ELT 전체 (대부분의 경우 권장)"},
+        {"value": "eht", "desc": "--eht: 하드웨어 비종속 단계만, quantized CNNX 까지"},
+        {"value": "elt", "desc": "--elt: 기존 EHT 결과로 specifier 만 (다른 SoC 재변환). EHT 결과 없으면 IndexError"}
+      ],
+      "desc": "eais conversion 의 --eht / --elt 옵션.",
+      "doc": "eais-user-guide", "section_title": "Step 3: conversion › 옵션"
+    },
+    {
+      "id": "debug.mode", "file": "debug_yaml", "key": "mode", "label": "debug 모드",
+      "type": "enum", "level": "basic", "default": "accuracy",
+      "when": [["pipeline.steps", "has", "debug"]],
+      "options": [
+        {"value": "accuracy", "desc": "단계별 정확도 지표 계산 → accuracy_comparison.xlsx"},
+        {"value": "visualize", "desc": "브라우저 그래프 시각화 (base_model_path 필요)"},
+        {"value": "all", "desc": "accuracy 후 visualize"}
+      ],
+      "desc": "eais debug 실행 모드.",
+      "doc": "debug-guide", "section_title": "옵션 및 파라미터"
+    },
+    {
+      "id": "debug.depth", "file": "debug_yaml", "key": "depth", "label": "debug 검증 범위",
+      "type": "enum", "level": "advanced", "default": "full",
+      "when": [["pipeline.steps", "has", "debug"], ["debug.mode", "!=", "visualize"]],
+      "options": [
+        {"value": "full", "desc": "기록된 모든 변환 단계 산출물 검증"},
+        {"value": "endpoints", "desc": "최종 산출물만 검증"}
+      ],
+      "desc": "accuracy 검증 범위.",
+      "doc": "debug-guide", "section_title": "옵션 및 파라미터"
+    },
+    {
+      "id": "debug.metrics", "file": "debug_yaml", "key": "metrics", "label": "정확도 지표",
+      "type": "multi", "level": "advanced", "default": ["SNR", "PSNR", "COSSIM"],
+      "when": [["pipeline.steps", "has", "debug"], ["debug.mode", "!=", "visualize"]],
+      "options": [
+        {"value": "SNR", "desc": "신호 대비 오차 비율 (dB), 값 ≥ threshold 이면 PASS"},
+        {"value": "PSNR", "desc": "최대 신호값 기준 오차 비율 (dB)"},
+        {"value": "COSSIM", "desc": "cosine 유사도"},
+        {"value": "MAX_ABS_DIFF", "desc": "최대 절대 오차, 값 ≤ threshold 이면 PASS"},
+        {"value": "MSE", "desc": "평균 제곱 오차"}
+      ],
+      "desc": "thresholds 와 1:1 로 대응한다.",
+      "doc": "debug-guide", "section_title": "지표 (Metrics)"
+    },
+    {
+      "id": "debug.thresholds", "file": "debug_yaml", "key": "thresholds", "label": "지표별 PASS 임계값",
+      "type": "list", "level": "advanced", "default": [10.0, 10.0, 0.5],
+      "when": [["pipeline.steps", "has", "debug"], ["debug.mode", "!=", "visualize"]],
+      "options": [
+        {"value": [10.0, 10.0, 0.5], "desc": "기본값 (SNR, PSNR, COSSIM)"},
+        {"value": [20.0, 20.0, 0.9], "desc": "A8W8 권장 SNR 20dB 기준"},
+        {"value": [30.0, 30.0, 0.99], "desc": "A16W8 권장 SNR 30dB 기준"}
+      ],
+      "desc": "metrics 와 같은 순서·개수로 쓴다.",
+      "doc": "debug-guide", "section_title": "SNR 결과 해석 기준"
+    },
+    {
+      "id": "compiler.mode", "file": "model_yaml", "section": "compiler", "key": "mode", "label": "컴파일 모드",
+      "type": "enum", "level": "basic", "default": "default",
+      "when": [["pipeline.steps", "has", "compile"]],
+      "options": [
+        {"value": "default", "desc": "표준 단일 코어 빌드"},
+        {"value": "multicore", "desc": "NPU 멀티코어 레이아웃/스케줄링"},
+        {"value": "tuning_mode", "desc": "compiler_tuning_mode_config.yaml 의 세부 옵션 사용 (고급)"},
+        {"value": "gen-ai", "desc": "Generative AI 최적화 프리셋"},
+        {"value": "gaussl", "desc": "GaussL 프리셋"},
+        {"value": "gaussi", "desc": "GaussI 프리셋"}
+      ],
+      "desc": "컴파일러 프리셋.",
+      "doc": "compile-guide", "section_title": "옵션 정리"
+    },
+    {
+      "id": "compiler.debug_str", "file": "model_yaml", "section": "compiler", "key": "debug_str", "label": "추가 컴파일 옵션 (debug_str)",
+      "type": "str", "level": "advanced", "default": null,
+      "when": [["pipeline.steps", "has", "compile"]],
+      "options": [
+        {"value": null, "desc": "추가 옵션 없음"},
+        {"value": "-D enable_automated_graph_slicing=true -D loop_scheduling=true -D flc", "desc": "성능 최적화 프리셋"},
+        {"value": "-D dram_reduction=true -D weight_comp=true -C remove_redundant_sfr_setting=true -C vc_allocation=static", "desc": "바이너리 사이즈 최적화 프리셋"}
+      ],
+      "desc": "-D: middleend, -C: backend, -N: 로그/System SW 로 전달. 예) eais compile --mode tuning_mode --debug_str '...'",
+      "doc": "compile-guide", "section_title": "CLI 명령어 사용법"
+    },
+    {
+      "id": "compiler.compiler_advanced_config", "file": "model_yaml", "section": "compiler", "key": "compiler_advanced_config", "label": "튜닝 설정 파일",
+      "type": "str", "level": "auto", "default": "Config/compiler_tuning_mode_config.yaml",
+      "when": [["pipeline.steps", "has", "compile"]],
+      "options": [], "desc": "mode=tuning_mode 일 때 사용.",
+      "doc": "compile-guide", "section_title": "옵션 정리"
+    },
+    {
+      "id": "compiler_tuning.optimization", "file": "compiler_tuning", "key": "optimization", "label": "컴파일 최적화 레벨",
+      "type": "enum", "level": "basic", "default": "O2",
+      "when": [["pipeline.steps", "has", "compile"], ["compiler.mode", "==", "tuning_mode"]],
+      "options": [{"value": "O2", "desc": "기본"}, {"value": "O1", "desc": ""}, {"value": "O0", "desc": "최적화 없음"}],
+      "desc": "Compiler Optimization level.",
+      "doc": "compile-guide", "section_title": "compiler_tuning_mode_config.yaml"
+    },
+    {
+      "id": "compiler_tuning.compiler", "file": "compiler_tuning", "key": "compiler", "label": "컴파일 대상 엔진",
+      "type": "enum", "level": "advanced", "default": "NPU",
+      "when": [["pipeline.steps", "has", "compile"], ["compiler.mode", "==", "tuning_mode"]],
+      "options": [{"value": "NPU", "desc": "기본"}, {"value": "CPUGPU", "desc": ""}, {"value": "DSP", "desc": ""}],
+      "desc": "Compiler option.",
+      "doc": "compile-guide", "section_title": "compiler_tuning_mode_config.yaml"
+    },
+    {
+      "id": "compiler_tuning.multicore", "file": "compiler_tuning", "key": "multicore", "label": "NPU 멀티코어",
+      "type": "bool", "level": "basic", "default": true,
+      "when": [["pipeline.steps", "has", "compile"], ["compiler.mode", "==", "tuning_mode"]],
+      "options": [{"value": true, "desc": "사용"}, {"value": false, "desc": "사용 안 함"}],
+      "desc": "Enable NPU multicore.",
+      "doc": "compile-guide", "section_title": "compiler_tuning_mode_config.yaml"
+    },
+    {
+      "id": "compiler_tuning.cast_inout", "file": "compiler_tuning", "key": "cast_inout", "label": "입출력 fp32↔fp16 캐스팅",
+      "type": "enum", "level": "advanced", "default": "hw",
+      "when": [["pipeline.steps", "has", "compile"], ["compiler.mode", "==", "tuning_mode"]],
+      "options": [{"value": "hw", "desc": ""}, {"value": "sw", "desc": ""}, {"value": "none", "desc": ""}],
+      "desc": "nnc 입력 fp32→fp16, 출력 fp16→fp32 캐스팅 방식.",
+      "doc": "compile-guide", "section_title": "compiler_tuning_mode_config.yaml"
+    },
+    {
+      "id": "compiler_tuning.quant_type", "file": "compiler_tuning", "key": "quant_type", "label": "Quantization type",
+      "type": "enum", "level": "advanced", "default": "hw",
+      "when": [["pipeline.steps", "has", "compile"], ["compiler.mode", "==", "tuning_mode"]],
+      "options": [{"value": "hw", "desc": ""}, {"value": "sw", "desc": ""}, {"value": "none", "desc": ""}],
+      "desc": "Quantization type.", "doc": "compile-guide", "section_title": "compiler_tuning_mode_config.yaml"
+    },
+    {
+      "id": "compiler_tuning.dequant_type", "file": "compiler_tuning", "key": "dequant_type", "label": "Dequantization type",
+      "type": "enum", "level": "advanced", "default": "hw",
+      "when": [["pipeline.steps", "has", "compile"], ["compiler.mode", "==", "tuning_mode"]],
+      "options": [{"value": "hw", "desc": ""}, {"value": "sw", "desc": ""}, {"value": "none", "desc": ""}],
+      "desc": "Dequantization type.", "doc": "compile-guide", "section_title": "compiler_tuning_mode_config.yaml"
+    },
+    {
+      "id": "compiler_tuning.input_conversion", "file": "compiler_tuning", "key": "input_conversion", "label": "입력 포맷 변환 노드",
+      "type": "enum", "level": "advanced", "default": "hw_cfu",
+      "when": [["pipeline.steps", "has", "compile"], ["compiler.mode", "==", "tuning_mode"]],
+      "options": [{"value": "hw_cfu", "desc": ""}, {"value": "sw_cfu", "desc": ""}, {"value": "no_cfu", "desc": ""}],
+      "desc": "네트워크 시작에 Raster2Cell 변환 노드 추가.", "doc": "compile-guide", "section_title": "compiler_tuning_mode_config.yaml"
+    },
+    {
+      "id": "compiler_tuning.output_conversion", "file": "compiler_tuning", "key": "output_conversion", "label": "출력 포맷 변환 노드",
+      "type": "enum", "level": "advanced", "default": "hw_icfu",
+      "when": [["pipeline.steps", "has", "compile"], ["compiler.mode", "==", "tuning_mode"]],
+      "options": [{"value": "hw_icfu", "desc": ""}, {"value": "sw_icfu", "desc": ""}, {"value": "no_icfu", "desc": ""}],
+      "desc": "네트워크 끝에 Cell2Raster 변환 노드 추가.", "doc": "compile-guide", "section_title": "compiler_tuning_mode_config.yaml"
+    },
+    {
+      "id": "compiler_tuning.weight_comp", "file": "compiler_tuning", "key": "weight_comp", "label": "weight 압축 (사이즈)",
+      "type": "bool", "level": "advanced", "default": false,
+      "when": [["pipeline.steps", "has", "compile"], ["compiler.mode", "==", "tuning_mode"]],
+      "options": [{"value": true, "desc": "바이너리 사이즈 감소"}, {"value": false, "desc": "기본"}],
+      "desc": "weight compression (-D).", "doc": "compile-guide", "section_title": "compiler_tuning_mode_config.yaml"
+    },
+    {
+      "id": "compiler_tuning.dram_reduction", "file": "compiler_tuning", "key": "dram_reduction", "label": "feature map 압축 (사이즈)",
+      "type": "bool", "level": "advanced", "default": false,
+      "when": [["pipeline.steps", "has", "compile"], ["compiler.mode", "==", "tuning_mode"]],
+      "options": [{"value": true, "desc": "바이너리 사이즈 감소"}, {"value": false, "desc": "기본"}],
+      "desc": "feature map compression (-D).", "doc": "compile-guide", "section_title": "compiler_tuning_mode_config.yaml"
+    },
+    {
+      "id": "compiler_tuning.loop_scheduling", "file": "compiler_tuning", "key": "loop_scheduling", "label": "loop scheduling (성능)",
+      "type": "bool", "level": "advanced", "default": false,
+      "when": [["pipeline.steps", "has", "compile"], ["compiler.mode", "==", "tuning_mode"]],
+      "options": [{"value": true, "desc": "성능 최적화"}, {"value": false, "desc": "기본"}],
+      "desc": "compiler scheduling (-D).", "doc": "compile-guide", "section_title": "compiler_tuning_mode_config.yaml"
+    },
+    {
+      "id": "compiler_tuning.enable_automated_graph_slicing", "file": "compiler_tuning", "key": "enable_automated_graph_slicing", "label": "자동 graph slicing (성능)",
+      "type": "bool", "level": "advanced", "default": false,
+      "when": [["pipeline.steps", "has", "compile"], ["compiler.mode", "==", "tuning_mode"]],
+      "options": [{"value": true, "desc": "성능 최적화"}, {"value": false, "desc": "기본"}],
+      "desc": "compiler scheduling (-D).", "doc": "compile-guide", "section_title": "compiler_tuning_mode_config.yaml"
+    },
+    {
+      "id": "profiler.ssh_bool", "file": "model_yaml", "section": "profiler", "key": "ssh_bool", "label": "기기 접속 방식",
+      "type": "enum", "level": "basic", "default": "SSH_FALSE",
+      "when": [["pipeline.steps", "has", "profiling"]],
+      "options": [
+        {"value": "SSH_FALSE", "desc": "SDK 서버에 직접 연결된 기기 (USB/로컬)"},
+        {"value": "SSH_TRUE", "desc": "SSH 로 원격 서버에 접속해 그 서버의 adb 기기 사용"}
+      ],
+      "desc": "Profiler 가 기기에 접근하는 방법. Docker → SSH → ADB 구조.",
+      "doc": "profiling-guide", "section_title": "옵션 정리"
+    },
+    {
+      "id": "profiler.device_id", "file": "model_yaml", "section": "profiler", "key": "device_id", "label": "기기 ID",
+      "type": "str", "level": "basic", "default": "NOT_USE",
+      "when": [["pipeline.steps", "has", "profiling"]],
+      "options": [{"value": "NOT_USE", "desc": "기기 선택 생략"}],
+      "desc": "adb devices 로 확인한 기기 ID (예: 10.229.116.245:7657).",
+      "doc": "profiling-guide", "section_title": "옵션 정리"
+    },
+    {
+      "id": "profiler.profiler_advance_config", "file": "model_yaml", "section": "profiler", "key": "profiler_advance_config", "label": "profiler 고급 설정 파일",
+      "type": "str", "level": "auto", "default": "Config/profiler_advanced_config.yaml",
+      "when": [["pipeline.steps", "has", "profiling"]],
+      "options": [], "desc": "고급 profiler 설정 파일 경로.",
+      "doc": "profiling-guide", "section_title": "옵션 정리"
+    },
+    {
+      "id": "profiler_adv.ssh_hostname", "file": "profiler_advanced", "key": "ssh_hostname", "label": "SSH 원격 서버 주소",
+      "type": "str", "level": "basic", "default": "NOT_USE",
+      "when": [["pipeline.steps", "has", "profiling"], ["profiler.ssh_bool", "==", "SSH_TRUE"]],
+      "options": [], "desc": "기기가 연결된 원격 서버 IP.",
+      "doc": "profiling-guide", "section_title": "profiler_advanced_config"
+    },
+    {
+      "id": "profiler_adv.ssh_port", "file": "profiler_advanced", "key": "ssh_port", "label": "SSH 포트",
+      "type": "str", "level": "basic", "default": "22",
+      "when": [["pipeline.steps", "has", "profiling"], ["profiler.ssh_bool", "==", "SSH_TRUE"]],
+      "options": [{"value": "22", "desc": "기본 SSH 포트"}], "desc": "SSH port.",
+      "doc": "profiling-guide", "section_title": "profiler_advanced_config"
+    },
+    {
+      "id": "profiler_adv.ssh_username", "file": "profiler_advanced", "key": "ssh_username", "label": "SSH 사용자 ID",
+      "type": "str", "level": "basic", "default": "NOT_USE",
+      "when": [["pipeline.steps", "has", "profiling"], ["profiler.ssh_bool", "==", "SSH_TRUE"]],
+      "options": [], "desc": "원격 서버 사용자 ID.",
+      "doc": "profiling-guide", "section_title": "profiler_advanced_config"
+    },
+    {
+      "id": "profiler_adv.ssh_passwd", "file": "profiler_advanced", "key": "ssh_passwd", "label": "SSH 비밀번호",
+      "type": "secret", "level": "auto", "default": "${EAIS_SSH_PASSWD}",
+      "when": [["pipeline.steps", "has", "profiling"], ["profiler.ssh_bool", "==", "SSH_TRUE"]],
+      "options": [], "desc": "이 앱은 비밀번호를 받지 않는다. 요청에는 ${EAIS_SSH_PASSWD} 자리표시자만 넣고 SDK 쪽에서 채운다.",
+      "doc": "profiling-guide", "section_title": "profiler_advanced_config"
+    },
+    {
+      "id": "profiler_adv.ssh_bool", "file": "profiler_advanced", "key": "ssh_bool", "label": "SSH 사용 (고급 설정)",
+      "type": "enum", "level": "auto", "default": "=profiler.ssh_bool",
+      "when": [["pipeline.steps", "has", "profiling"]],
+      "options": [{"value": "SSH_FALSE", "desc": ""}, {"value": "SSH_TRUE", "desc": ""}],
+      "desc": "profiler.ssh_bool 과 같은 값을 쓴다.",
+      "doc": "profiling-guide", "section_title": "profiler_advanced_config"
+    },
+    {
+      "id": "profiler_adv.core_num", "file": "profiler_advanced", "key": "core_num", "label": "NPU core 수",
+      "type": "enum", "level": "basic", "default": "single",
+      "when": [["pipeline.steps", "has", "profiling"]],
+      "options": [{"value": "single", "desc": "단일 코어"}, {"value": "multiple", "desc": "멀티 코어 (compiler.mode multicore 와 맞춤)"}],
+      "desc": "모델이 실행되는 NPU core 수.",
+      "doc": "profiling-guide", "section_title": "profiler_advanced_config"
+    },
+    {
+      "id": "profiler_adv.mode", "file": "profiler_advanced", "key": "mode", "label": "기기 성능 모드",
+      "type": "enum", "level": "basic", "default": "performance",
+      "when": [["pipeline.steps", "has", "profiling"]],
+      "options": [
+        {"value": "performance", "desc": "고전력·고성능 (기본)"},
+        {"value": "boost", "desc": "초고전력·초고성능"},
+        {"value": "balanced", "desc": "중간 전력·중간 성능"},
+        {"value": "lowpower", "desc": "저전력·저성능"},
+        {"value": "custom", "desc": "perfconfig_id 로 세부 설정 (GenAI, Benchmark)"}
+      ],
+      "desc": "Enn test app 수행 모드.",
+      "doc": "profiling-guide", "section_title": "profiler_advanced_config"
+    },
+    {
+      "id": "profiler_adv.perfconfig_id", "file": "profiler_advanced", "key": "perfconfig_id", "label": "perfconfig_id",
+      "type": "int", "level": "basic", "default": 100001,
+      "when": [["pipeline.steps", "has", "profiling"], ["profiler_adv.mode", "==", "custom"]],
+      "options": [{"value": 100001, "desc": "기본값"}], "desc": "mode 가 custom 일 때 지정.",
+      "doc": "profiling-guide", "section_title": "profiler_advanced_config"
+    },
+    {
+      "id": "profiler_adv.iter", "file": "profiler_advanced", "key": "iter", "label": "추론 반복 횟수",
+      "type": "int", "level": "basic", "default": 1,
+      "when": [["pipeline.steps", "has", "profiling"]],
+      "options": [{"value": 1, "desc": "1회 (기본)"}, {"value": 10, "desc": "10회"}, {"value": 100, "desc": "100회"}],
+      "desc": "모델 수행 횟수.",
+      "doc": "profiling-guide", "section_title": "profiler_advanced_config"
+    },
+    {
+      "id": "profiler_adv.target", "file": "profiler_advanced", "key": "target", "label": "profiling 대상",
+      "type": "enum", "level": "basic", "default": "model",
+      "when": [["pipeline.steps", "has", "profiling"]],
+      "options": [
+        {"value": "model", "desc": "모델 레이어별 profiling"},
+        {"value": "system", "desc": "enn 실행 로그 요약 (cpu/gpu/npu/kernel)"}
+      ],
+      "desc": "profiling 대상.",
+      "doc": "profiling-guide", "section_title": "profiler_advanced_config"
+    },
+    {
+      "id": "profiler_adv.npu_only", "file": "profiler_advanced", "key": "npu_only", "label": "NPU 전용 모델 여부",
+      "type": "bool", "level": "advanced", "default": true,
+      "when": [["pipeline.steps", "has", "profiling"]],
+      "options": [{"value": true, "desc": "모든 연산이 NPU 에서 수행"}, {"value": false, "desc": "DSP 등에서 수행되는 연산 있음"}],
+      "desc": "모델 내 모든 operation 이 NPU 에서만 수행되면 true.",
+      "doc": "profiling-guide", "section_title": "profiler_advanced_config"
+    },
+    {
+      "id": "profiler_adv.bitmatch_test", "file": "profiler_advanced", "key": "bitmatch_test", "label": "bit matching 만 확인",
+      "type": "bool", "level": "advanced", "default": false,
+      "when": [["pipeline.steps", "has", "profiling"]],
+      "options": [{"value": false, "desc": "profiling 결과 생성"}, {"value": true, "desc": "profiling 없이 bitmatch 만"}],
+      "desc": "Profiling 결과 생성 없이 bit matching 만 확인.",
+      "doc": "profiling-guide", "section_title": "profiler_advanced_config"
+    },
+    {
+      "id": "profiler_adv.useSNR", "file": "profiler_advanced", "key": "useSNR", "label": "bitmatch 판단 기준",
+      "type": "bool", "level": "advanced", "default": true,
+      "when": [["pipeline.steps", "has", "profiling"]],
+      "options": [{"value": true, "desc": "SNR 기준"}, {"value": false, "desc": "tv_threshold 기준"}],
+      "desc": "모델의 bit matching 판단 기준.",
+      "doc": "profiling-guide", "section_title": "profiler_advanced_config"
+    },
+    {
+      "id": "profiler_adv.tv_threshold", "file": "profiler_advanced", "key": "tv_threshold", "label": "bitmatch threshold",
+      "type": "float", "level": "advanced", "default": 0.0001,
+      "when": [["pipeline.steps", "has", "profiling"]],
+      "options": [{"value": 0.0001, "desc": "기본값"}],
+      "desc": "EnnTest bit matching threshold.",
+      "doc": "profiling-guide", "section_title": "profiler_advanced_config"
+    },
+    {
+      "id": "profiler_adv.ssh_workspace", "file": "profiler_advanced", "key": "ssh_workspace", "label": "원격 결과 저장 위치",
+      "type": "str", "level": "auto", "default": "./ssh_workspace",
+      "when": [["pipeline.steps", "has", "profiling"]],
+      "options": [], "desc": "Profiling 결과가 저장되는 위치.",
+      "doc": "profiling-guide", "section_title": "profiler_advanced_config"
+    },
+    {
+      "id": "profiler_adv.test_type", "file": "profiler_advanced", "key": "test_type", "label": "Enn test app type",
+      "type": "enum", "level": "auto", "default": "lib",
+      "when": [["pipeline.steps", "has", "profiling"]],
+      "options": [{"value": "lib", "desc": "기본 (변경 불필요)"}, {"value": "service", "desc": ""}],
+      "desc": "lib 이 기본이므로 변경할 필요 없음.",
+      "doc": "profiling-guide", "section_title": "profiler_advanced_config"
+    }
+  ],
+  "hints": [
+    "워크스페이스 폴더명과 모델 파일명(확장자 제외)이 같아야 한다 (Error code 102).",
+    "ONNX opset 13–21 은 통과, 1–12 는 13 으로 자동 변환, 그 외는 OpsetVersionValidator 실패.",
+    "그래프 입력에 'batch', 'seq_len' 같은 비정수 동적 차원이 있으면 DynamicInputValidator 가 실패한다. dbgen shape 에 정수를 지정하고 모델을 고정 shape 로 export 하는 것을 권한다.",
+    "Einsum 연산자는 downstream 툴체인이 지원하지 않는다 (ContainsEinsumValidator).",
+    "QParamBitwidthValidator: activation bitwidth ∈ {8,16}, weight bitwidth ∈ {4,8}.",
+    "raw/bin 데이터 파일 크기 = dtype 크기 × shape 원소 수. 맞지 않으면 generation 에서 'cannot reshape array' 오류.",
+    "random: True 여도 shape, order, dtype 은 실제 모델 입력에 맞게 지정해야 한다.",
+    "SNR 권장 기준: FP16 35dB, A16W8 30dB, A8W8 20dB 이상.",
+    "SNR 이 낮으면: calibration_method minmax→percentile→histogram_enhanced, precision A8W8→A16W8→FP16, 실제 대표 데이터셋 사용, smoothquant 검토.",
+    "--elt 단독 실행은 기존 EHT 결과가 있을 때만 가능하다.",
+    "compile 은 Converter_result/HW_*.snc 가 있어야 한다. profiling 은 Compiler_result 와 기기(Enn test app 설치)가 필요하다.",
+    "SDK 2.5 에서 만든 yaml 은 SDK 3.0 과 호환되지 않으므로 삭제 후 eais init 을 다시 실행해야 한다. 캘리브레이션 데이터도 .h5 → .npy 로 재생성해야 한다.",
+    "device 설정이 실제 타겟 하드웨어와 다르면 compile/profiling 결과가 무효하다."
+  ]
+}

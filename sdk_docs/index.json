@@ -1,0 +1,82 @@
+[
+  {
+    "title": "EAIS 사용자 가이드",
+    "slug": "documentation/sdk-3.0/eais-user-guide",
+    "lang": "ko",
+    "file": "ko_EAIS_User_Guide.md",
+    "chars": 28838,
+    "url": "https://soc-developer.semiconductor.samsung.com/global/development/ai-studio/document/documentation/sdk-3.0/eais-user-guide"
+  },
+  {
+    "title": "SDK 3.0 업데이트 안내",
+    "slug": "documentation/sdk-3.0/whats-new",
+    "lang": "ko",
+    "file": "ko_EAIS_WhatsNew_SDK3.0.md",
+    "chars": 11467,
+    "url": "https://soc-developer.semiconductor.samsung.com/global/development/ai-studio/document/documentation/sdk-3.0/whats-new"
+  },
+  {
+    "title": "디버그 가이드",
+    "slug": "documentation/sdk-3.0/debug-guide",
+    "lang": "ko",
+    "file": "ko_eais_debug_guide.md",
+    "chars": 49678,
+    "url": "https://soc-developer.semiconductor.samsung.com/global/development/ai-studio/document/documentation/sdk-3.0/debug-guide"
+  },
+  {
+    "title": "컴파일 가이드",
+    "slug": "documentation/sdk-3.0/compile-guide",
+    "lang": "ko",
+    "file": "ko_eais_compile_guide.md",
+    "chars": 17403,
+    "url": "https://soc-developer.semiconductor.samsung.com/global/development/ai-studio/document/documentation/sdk-3.0/compile-guide"
+  },
+  {
+    "title": "프로파일링 가이드",
+    "slug": "documentation/sdk-3.0/profiling-guide",
+    "lang": "ko",
+    "file": "ko_eais_profiling_guide.md",
+    "chars": 7423,
+    "url": "https://soc-developer.semiconductor.samsung.com/global/development/ai-studio/document/documentation/sdk-3.0/profiling-guide"
+  },
+  {
+    "title": "EAIS User Guide",
+    "slug": "documentation/sdk-3.0-en/eais-user-guide",
+    "lang": "en",
+    "file": "en_EAIS_User_Guide.md",
+    "chars": 37685,
+    "url": "https://soc-developer.semiconductor.samsung.com/global/development/ai-studio/document/documentation/sdk-3.0-en/eais-user-guide"
+  },
+  {
+    "title": "SDK 3.0 Update Guide",
+    "slug": "documentation/sdk-3.0-en/whats-new",
+    "lang": "en",
+    "file": "en_EAIS_WhatsNew_SDK3.0.md",
+    "chars": 15198,
+    "url": "https://soc-developer.semiconductor.samsung.com/global/development/ai-studio/document/documentation/sdk-3.0-en/whats-new"
+  },
+  {
+    "title": "Debug Guide",
+    "slug": "documentation/sdk-3.0-en/debug-guide",
+    "lang": "en",
+    "file": "en_eais_debug_guide.md",
+    "chars": 61208,
+    "url": "https://soc-developer.semiconductor.samsung.com/global/development/ai-studio/document/documentation/sdk-3.0-en/debug-guide"
+  },
+  {
+    "title": "Compile Guide",
+    "slug": "documentation/sdk-3.0-en/compile-guide",
+    "lang": "en",
+    "file": "en_eais_compile_guide.md",
+    "chars": 18228,
+    "url": "https://soc-developer.semiconductor.samsung.com/global/development/ai-studio/document/documentation/sdk-3.0-en/compile-guide"
+  },
+  {
+    "title": "Profiling Guide",
+    "slug": "documentation/sdk-3.0-en/profiling-guide",
+    "lang": "en",
+    "file": "en_eais_profiling_guide.md",
+    "chars": 8449,
+    "url": "https://soc-developer.semiconductor.samsung.com/global/development/ai-studio/document/documentation/sdk-3.0-en/profiling-guide"
+  }
+]

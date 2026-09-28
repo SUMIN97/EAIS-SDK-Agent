@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>EAIS SDK 에이전트</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand">EAIS SDK 에이전트 <span class="sub">모델 업로드 → 단계 선택 → 단계별 설정 → SDK MCP 요청</span></div>
+  <div class="status" id="status">상태 확인 중…</div>
+</header>
+
+<div class="flow">
+
+  <!-- 1. 모델 파일 업로드 -->
+  <section class="panel sec" id="sec1">
+    <h2><span class="num">1</span> 모델 파일 업로드</h2>
+    <div class="sec1-grid">
+      <div>
+        <label class="drop" id="drop">
+          <input type="file" id="file" accept=".onnx,.tflite" hidden>
+          <div class="drop-main">여기에 .onnx / .tflite 를 끌어 놓거나 클릭</div>
+          <div class="drop-sub">파일은 이 PC(uploads/)에만 저장됩니다. LLM 에는 입력 shape·연산자 같은 메타정보만 보냅니다.</div>
+        </label>
+        <div class="progress hidden" id="progress"><div class="bar" id="bar"></div><span id="ptext"></span></div>
+      </div>
+      <div id="model"><div class="empty">모델을 올리면 입력·출력, opset, 연산자 분포와 SDK 3.0 점검 결과가 여기에 나옵니다.</div></div>
+    </div>
+  </section>
+
+  <!-- 2. 실행 단계 선택 -->
+  <section class="panel sec locked" id="sec2">
+    <h2><span class="num">2</span> 실행 단계 선택 <span class="fine">SDK 3.0 문서 권장 순서 · 카드를 눌러 실행 여부를 정합니다</span></h2>
+    <div class="stepper" id="stepper"></div>
+  </section>
+
+  <!-- 3. 단계별 설정 -->
+  <section class="panel sec locked" id="sec3">
+    <div class="out-head">
+      <h2><span class="num">3</span> 단계별 설정</h2>
+      <div class="tabs" id="modeTabs">
+        <button data-mode="table" class="on">표로 설정</button>
+        <button data-mode="agent">에이전트 질문으로 설정 <span id="remainBadge"></span></button>
+      </div>
+    </div>
+
+    <div id="tableView">
+      <div class="stagetabs" id="stageTabs"></div>
+      <div id="stagebody"></div>
+    </div>
+
+    <div id="agentView" class="hidden">
+      <div class="log" id="log"><div class="empty">모델 파일을 올리면 에이전트가 SDK 3.0 문서를 기준으로 필요한 설정을 하나씩 묻습니다.</div></div>
+      <div id="question"></div>
+      <div class="toolbar hidden" id="toolbar">
+        <label class="switch"><input type="checkbox" id="advanced"> 고급 옵션도 묻기</label>
+        <span class="remain" id="remain"></span>
+        <button class="ghost" id="fill">나머지는 기본값으로</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4. SDK MCP 요청 -->
+  <section class="panel sec locked" id="sec4">
+    <h2><span class="num">4</span> SDK MCP 요청</h2>
+    <div class="sec4-grid">
+      <div>
+        <h3 class="subh">기본값에서 바꾼 설정</h3>
+        <div id="summary"><div class="empty">아직 바꾼 값이 없습니다. 모두 문서 기본값으로 요청합니다.</div></div>
+      </div>
+      <div class="submitbox">
+        <button class="primary big" id="submit" disabled>SDK MCP 요청 만들기</button>
+        <p class="fine">요청을 <b>만들어 보여 주기만</b> 합니다. 실제 전송은 하지 않습니다.</p>
+      </div>
+    </div>
+
+    <div class="output hidden" id="output">
+      <div class="tabs" id="tabs">
+        <button data-tab="request" class="on">MCP 요청 (tools/call)</button>
+        <button data-tab="http">HTTP · curl</button>
+        <button data-tab="files">YAML 파일</button>
+        <button data-tab="cli">CLI 명령</button>
+        <button data-tab="warnings">점검 결과</button>
+        <button data-tab="tool">도구 스키마</button>
+      </div>
+      <div id="tabbody"></div>
+    </div>
+  </section>
+
+</div>
+
+<script src="/app.js"></script>
+</body>
+</html>
